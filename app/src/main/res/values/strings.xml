@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">MapDemo</string>
+    <string name="capacity">Kapasite :</string>
+    <string name="address">Adres :</string>
+    <string name="stadiumName">Kocaeli Stadyum</string>
+    <string name="year">Yıl :</string>
+    <string name="close">KAPAT</string>
+</resources>
