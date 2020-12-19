@@ -1,153 +1,116 @@
 package com.example.mapdemo;
 
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-
-import android.Manifest;
-import android.content.Context;
-import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.huawei.hms.maps.CameraUpdateFactory;
 import com.huawei.hms.maps.HuaweiMap;
 import com.huawei.hms.maps.MapView;
 import com.huawei.hms.maps.MapsInitializer;
 import com.huawei.hms.maps.OnMapReadyCallback;
-import com.huawei.hms.maps.model.BitmapDescriptorFactory;
 import com.huawei.hms.maps.model.LatLng;
-import com.huawei.hms.maps.model.Marker;
 import com.huawei.hms.maps.model.MarkerOptions;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.List;
+
 
 public class MainActivity extends AppCompatActivity  implements OnMapReadyCallback {
 
     private static final String TAG = "MapViewDemoActivity";
-    //HUAWEI map
+
+    private static final String MAPVIEW_BUNDLE_KEY = "MapViewBundleKey";
+
     private HuaweiMap hMap;
     private MapView mMapView;
 
-    private static final String MAPVIEW_BUNDLE_KEY = "MapViewBundleKey";
+    JSONArray jsonArray;
+    private Gson gson;
+    private List<DetailActivity.Stadium> stadiums;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        RequestQueue queue = Volley.newRequestQueue(this);
+        String url = "https://public.opendatasoft.com/api/records/1.0/search/?dataset=stadiums_nfl&q=&facet=subsector&facet=primary_ty&facet=name1&facet=city&facet=state&facet=conference&facet=division&facet=roof_type";
+        GsonBuilder gsonBuilder = new GsonBuilder();
+        gson = gsonBuilder.create();
+        stadiums = new ArrayList<DetailActivity.Stadium>();
+// Request a string response from the provided URL.
+        StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        JSONObject jsonObject = null;
+                        try {
+                            Log.d(TAG, "onResponse: ");
+                            jsonObject = new JSONObject(response);
+                            jsonArray = jsonObject.getJSONArray("records");
+
+                            for (int i = 0; i < jsonArray.length(); i++) {
+                                JSONObject jo = jsonArray.getJSONObject(i);
+                                // jo.getJSONObject("fields").getString("longitude")
+                                DetailActivity.Stadium tmpStad = gson.fromJson(jo.getJSONObject("fields").toString(), DetailActivity.Stadium.class);
+                                stadiums.add(tmpStad);
+                                hMap.addMarker(new MarkerOptions().position(new LatLng(tmpStad.latitude, tmpStad.longitude)).title(tmpStad.name).clusterable(true));
+                                Log.d(TAG, jo.toString());
+                                Toast.makeText(MainActivity.this, "Doldu!", Toast.LENGTH_SHORT).show();
+                                //hMap.addMarker(new MarkerOptions().position(new LatLng(48.891478, 2.334595)).title("Marker1").clusterable(true));
+                            }
+                            int lastStadium = stadiums.size()-1;
+                            hMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                                    new LatLng(stadiums.get(lastStadium).latitude,
+                                            stadiums.get(lastStadium).longitude),3));
+                        } catch (JSONException e) {
+                            Log.d(TAG, "onResponse: Hata");
+                            e.printStackTrace();
+                        }
+
+                        // Display the first 500 characters of the response string.
+                        //textView.setText("Response is: "+ response.substring(0,500));
+                    }
+                }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                //textView.setText("That didn't work!");
+                Log.d(TAG, "onErrorResponse: Hata volleyden gelme");
+            }
+        });
+
+        queue.add(stringRequest);
+
         mMapView = findViewById(R.id.mapView);
         Bundle mapViewBundle = null;
         if (savedInstanceState != null) {
             mapViewBundle = savedInstanceState.getBundle(MAPVIEW_BUNDLE_KEY);
         }
-
-        MapsInitializer.setApiKey("CgB6e3x9z1DQNO9PSRjcTTSNpNw3IhIoth3vgtdqDrU+FsCxewDHESpYutdRxKAby3fWNTufBSzGFrLb/Pwb6YnA");
+        MapsInitializer.setApiKey("CgB6e3x9tLhypzrfZKtdECrOKLskHk0XxtcUKUmp34NmJ1doBLQl9FtPokjBamyurC0g2L9rNSqNNmSDDWSmRx5p");
         mMapView.onCreate(mapViewBundle);
-        //get map instance
         mMapView.getMapAsync(this);
 
-        applyPermission();
-    }
-
-    public void applyPermission(){
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Log.i(TAG, "sdk >= 23 M");
-            // Check whether your app has the specified permission and whether the app operation corresponding to the permission is allowed.
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
-                    ||
-                    ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED)
-            {
-
-                String[] strings =
-                        {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
-
-                ActivityCompat.requestPermissions(this, strings, 1);
-            }
-        }
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 1) {
-            if (grantResults.length > 1 && grantResults[0] == PackageManager.PERMISSION_GRANTED
-                    && grantResults[1] == PackageManager.PERMISSION_GRANTED) {
-                Log.i(TAG, "onRequestPermissionsResult: apply LOCATION PERMISSION successful");
-
-                hMap.setMyLocationEnabled(true);
-
-                hMap.getUiSettings().setMyLocationButtonEnabled(true);
-
-            } else {
-                Log.i(TAG, "onRequestPermissionsResult: apply LOCATION PERMISSSION  failed");
-
-            }
-        }
-    }
-
-    private static boolean hasPermissions(Context context, String... permissions) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && permissions != null) {
-            for (String permission : permissions) {
-                if (ActivityCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    private void addMarker(double latitude, double longitude, String title, String snip) {
-
-
-        MarkerOptions options = new MarkerOptions()
-                .position(new LatLng(41.0055005, 28.7319876))
-                .title(title)
-                .snippet(snip)
-                .icon(BitmapDescriptorFactory.fromResource(R.drawable.mymarker))
-                .clusterable(true);
-
-        hMap.addMarker(options);
-    }
-    
-    public void addMarker(LatLng lng, String title, String snip) {
-        addMarker(lng.latitude, lng.longitude, title, snip);
+    public void onMapReady(HuaweiMap map) {
+        hMap = map;
     }
 
 
-
-    @Override
-    public void onMapReady(HuaweiMap huaweiMap) {
-        //get map instance in a callback method
-        Log.d(TAG, "onMapReady: ");
-        hMap = huaweiMap;
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Log.i(TAG, "sdk >= 23 M");
-            // Check whether your app has the specified permission and whether the app operation corresponding to the permission is allowed.
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
-                    ||
-                    ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED)
-            {
-
-            }
-            else
-            {
-                // Enable the my-location layer.
-                hMap.setMyLocationEnabled(true);
-                // Enable the my-location icon.
-                hMap.getUiSettings().setMyLocationButtonEnabled(true);
-            }
-        }
-        hMap.setMarkersClustering(true);
-
-        hMap.setOnMarkerClickListener(new HuaweiMap.OnMarkerClickListener() {
-            @Override
-            public boolean onMarkerClick(Marker marker) {
-
-                Intent intent = new Intent(getApplicationContext(), DetailActivity.class);
-                return true;
-            }
-        });
-    }
 }
